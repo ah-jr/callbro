@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>callbro</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- First-run: ask the person's name -->
+    <div id="setup" class="screen hidden">
+      <div class="card">
+        <h1>callbro</h1>
+        <p>Como você se chama? É assim que as pessoas vão te ver no mapa.</p>
+        <input id="setup-name" type="text" placeholder="Seu nome" maxlength="40" autofocus />
+        <button id="setup-save" class="primary">Entrar</button>
+      </div>
+    </div>
+
+    <!-- Main app -->
+    <div id="app" class="screen hidden">
+      <header>
+        <div class="brand">
+          <span class="logo">📣</span>
+          <div>
+            <div class="title">callbro</div>
+            <div id="me" class="subtitle"></div>
+          </div>
+        </div>
+        <div class="actions">
+          <span id="status" class="pill">conectando…</span>
+          <button id="edit-btn" class="ghost hidden">Editar layout</button>
+          <button id="settings-btn" class="ghost">⚙︎</button>
+        </div>
+      </header>
+
+      <main>
+        <section id="grid-wrap">
+          <div id="grid"></div>
+          <p id="hint" class="hint"></p>
+        </section>
+
+        <!-- Admin editing sidebar -->
+        <aside id="editor" class="hidden">
+          <h3>Editar layout</h3>
+          <div class="row">
+            <label>Linhas <input id="grid-rows" type="number" min="1" max="40" /></label>
+            <label>Colunas <input id="grid-cols" type="number" min="1" max="40" /></label>
+            <button id="grid-apply" class="small">Aplicar</button>
+          </div>
+          <p class="muted">Clique numa pessoa e depois num lugar vazio para posicioná-la.</p>
+          <div id="selected-info" class="muted"></div>
+          <h4>Sem lugar</h4>
+          <div id="unassigned" class="chip-list"></div>
+          <h4>Todos</h4>
+          <div id="all-users" class="chip-list"></div>
+        </aside>
+      </main>
+    </div>
+
+    <!-- Incoming call overlay -->
+    <div id="incoming" class="overlay hidden">
+      <div class="call-card">
+        <div class="call-emoji">🔔</div>
+        <div id="incoming-text" class="call-text"></div>
+        <button id="incoming-dismiss" class="primary">Ok, já vou!</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings" class="overlay hidden">
+      <div class="card">
+        <h2>Configurações</h2>
+        <div id="cfg-client">
+          <label class="field">Servidor manual (ip:porta) — opcional
+            <input id="cfg-server" type="text" placeholder="ex: 192.168.0.10:8787" />
+          </label>
+          <p class="muted">Deixe em branco para encontrar o servidor automaticamente na rede.</p>
+        </div>
+        <div id="cfg-admin" class="hidden">
+          <p class="muted" id="admin-info"></p>
+        </div>
+        <div class="row end">
+          <button id="settings-close" class="ghost">Fechar</button>
+          <button id="settings-save" class="primary">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,55 @@
+name: build
+
+# Builds two apps for macOS (.dmg/.app) and Windows (.msi/.exe):
+#   - callbro         (client — for everyone)
+#   - callbro-admin   (admin — just for you; hosts the server + edits the layout)
+# Push a tag like v0.1.0, or run manually from the Actions tab.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            variant: client
+            args: "--target universal-apple-darwin"
+          - platform: macos-latest
+            variant: admin
+            args: "--target universal-apple-darwin --features admin --config src-tauri/tauri.admin.conf.json"
+          - platform: windows-latest
+            variant: client
+            args: ""
+          - platform: windows-latest
+            variant: admin
+            args: "--features admin --config src-tauri/tauri.admin.conf.json"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "callbro ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

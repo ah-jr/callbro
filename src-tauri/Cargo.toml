@@ -1,0 +1,37 @@
+[package]
+name = "callbro"
+version = "0.1.0"
+description = "callbro - office intercom for the LAN"
+authors = ["Faz Capital"]
+edition = "2021"
+
+[lib]
+name = "callbro_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# Build with `--features admin` to produce the admin app (hosts the server,
+# can edit the layout). The default build is a plain client.
+admin = []
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time", "io-util"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+mdns-sd = "0.11"
+local-ip-address = "0.6"
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+# NOTE: do not enable `strip` — it corrupts the macOS code signature.
+lto = true
+codegen-units = 1
