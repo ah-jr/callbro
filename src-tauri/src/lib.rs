@@ -18,6 +18,22 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// macOS puts apps with no visible window into "App Nap", which suspends the
+/// webview and its WebSocket — so a client hidden in the tray stops receiving
+/// calls. Holding a background NSActivity token for the process lifetime opts
+/// out of App Nap. (The old NSAppSleepDisabled Info.plist key is ignored since
+/// macOS Sierra.) The token is intentionally leaked so it lives forever.
+#[cfg(target_os = "macos")]
+fn prevent_app_nap() {
+    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+    // NSActivityBackground = 0x000000FF — disables App Nap without keeping the
+    // whole Mac (display/system) awake.
+    let options = NSActivityOptions::from_bits_retain(0x0000_00FF);
+    let reason = NSString::from_str("callbro stays reachable in the background");
+    let token = NSProcessInfo::processInfo().beginActivityWithOptions_reason(options, &reason);
+    std::mem::forget(token);
+}
+
 /// This build is the admin app when compiled with `--features admin`.
 const IS_ADMIN: bool = cfg!(feature = "admin");
 
@@ -161,6 +177,9 @@ pub fn run() {
         ))
         .manage(AppState::default())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            prevent_app_nap();
+
             if IS_ADMIN {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.set_title("callbro (admin)");

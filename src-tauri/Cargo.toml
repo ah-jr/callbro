@@ -1,6 +1,6 @@
 [package]
 name = "callbro"
-version = "0.1.0"
+version = "0.1.1"
 description = "callbro - office intercom for the LAN"
 authors = ["Faz Capital"]
 edition = "2021"
@@ -30,6 +30,11 @@ futures-util = "0.3"
 mdns-sd = "0.11"
 local-ip-address = "0.6"
 uuid = { version = "1", features = ["v4"] }
+
+# macOS: opt out of App Nap so the app keeps receiving calls while hidden in the tray.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSProcessInfo", "NSString"] }
 
 [profile.release]
 # NOTE: do not enable `strip` — it corrupts the macOS code signature.
