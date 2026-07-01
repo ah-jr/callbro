@@ -1,6 +1,6 @@
 [package]
 name = "callbro"
-version = "0.1.1"
+version = "0.1.2"
 description = "callbro - office intercom for the LAN"
 authors = ["Faz Capital"]
 edition = "2021"

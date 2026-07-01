@@ -11,6 +11,10 @@ use tauri::{
 use tauri_plugin_notification::NotificationExt;
 
 fn show_main(app: &AppHandle) {
+    // macOS: reveal the Dock icon while the window is on screen, so it focuses
+    // reliably (important for the incoming-call popup).
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();
@@ -221,6 +225,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let _ = window.hide();
+                // macOS: drop the Dock icon so it lives only in the menu bar
+                // (Docker-style) while hidden.
+                #[cfg(target_os = "macos")]
+                let _ = window
+                    .app_handle()
+                    .set_activation_policy(tauri::ActivationPolicy::Accessory);
                 api.prevent_close();
             }
         })
