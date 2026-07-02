@@ -14,6 +14,15 @@ let heartbeat = null;
 let denied = false; // set when the server rejects the team code
 const CALL_COOLDOWN_MS = 60000; // can't re-call the same person within 1 min
 const lastCall = {}; // userId -> timestamp of last call sent
+let pendingUser = null; // person chosen in the action picker
+
+// What you can send when you click someone. `phrase` is what the callee sees/hears.
+const ACTIONS = {
+  chamar:  { emoji: "📣",  label: "Chamar",  phrase: (n) => `${n} está te chamando` },
+  almocar: { emoji: "🍽️", label: "Almoçar", phrase: (n) => `${n} quer almoçar` },
+  treinar: { emoji: "💪",  label: "Treinar", phrase: (n) => `${n} quer treinar` },
+  fumar:   { emoji: "🚬",  label: "Fumar",   phrase: (n) => `${n} quer fumar` },
+};
 
 const $ = (id) => document.getElementById(id);
 const isAdmin = () => !!(config && config.admin_key && config.admin_key.trim());
@@ -103,7 +112,7 @@ function connect() {
       state = msg;
       render();
     } else if (msg.type === "incoming_call") {
-      onIncomingCall(msg.from_name || "Alguém");
+      onIncomingCall(msg.from_name || "Alguém", msg.action);
     } else if (msg.type === "denied") {
       // wrong team code — stop reconnecting and send them back to setup
       denied = true;
@@ -211,7 +220,7 @@ function seatEl(user) {
       selectedUserId = selectedUserId === user.id ? null : user.id;
       render();
     } else if (!me && user.online) {
-      callUser(user);
+      openActionPanel(user);
     } else if (!me && !user.online) {
       toast(`${user.name} está offline.`);
     }
@@ -291,22 +300,35 @@ function chipEl(user, showActions) {
 }
 
 // ---------- calling ----------
-function callUser(user) {
-  const now = Date.now();
-  const elapsed = now - (lastCall[user.id] || 0);
+// Clicking a person opens the action picker (respecting the per-person cooldown).
+function openActionPanel(user) {
+  const elapsed = Date.now() - (lastCall[user.id] || 0);
   if (elapsed < CALL_COOLDOWN_MS) {
     const wait = Math.ceil((CALL_COOLDOWN_MS - elapsed) / 1000);
-    toast(`Você já chamou ${user.name}. Aguarde ${wait}s para chamar de novo.`);
+    toast(`Você já chamou ${user.name}. Aguarde ${wait}s.`);
     return;
   }
-  lastCall[user.id] = now;
-  send({ type: "call", to: user.id });
-  toast(`Chamando ${user.name}…`);
+  pendingUser = user;
+  $("action-title").textContent = user.name;
+  $("action-panel").classList.remove("hidden");
 }
 
-function onIncomingCall(fromName) {
-  const text = `${fromName} tá te chamando`;
-  invoke("alert", { fromName }).catch(() => {});
+function pickAction(actionKey) {
+  const user = pendingUser;
+  $("action-panel").classList.add("hidden");
+  pendingUser = null;
+  if (!user) return;
+  const a = ACTIONS[actionKey] || ACTIONS.chamar;
+  lastCall[user.id] = Date.now();
+  send({ type: "call", to: user.id, action: actionKey });
+  toast(`${a.emoji} Enviado para ${user.name}`);
+}
+
+function onIncomingCall(fromName, actionKey) {
+  const a = ACTIONS[actionKey] || ACTIONS.chamar;
+  const text = a.phrase(fromName);
+  invoke("alert", { body: text }).catch(() => {});
+  $("incoming-emoji").textContent = a.emoji;
   $("incoming-text").textContent = text;
   $("incoming").classList.remove("hidden");
   playChime();
@@ -370,6 +392,14 @@ function wireEvents() {
   };
 
   $("update-btn").onclick = runUpdate;
+
+  document.querySelectorAll(".action-btn").forEach((b) => {
+    b.onclick = () => pickAction(b.dataset.action);
+  });
+  $("action-cancel").onclick = () => {
+    $("action-panel").classList.add("hidden");
+    pendingUser = null;
+  };
 
   $("incoming-dismiss").onclick = () => $("incoming").classList.add("hidden");
 

@@ -120,12 +120,12 @@ async fn do_update(app: AppHandle) -> Result<(), String> {
 /// A call arrived: native OS notification + bring the window to the front.
 /// (Chime + spoken name are handled in the webview.)
 #[tauri::command]
-fn alert(app: AppHandle, from_name: String) {
+fn alert(app: AppHandle, body: String) {
     let _ = app
         .notification()
         .builder()
         .title("callbro")
-        .body(format!("{} tá te chamando", from_name))
+        .body(body)
         .show();
 
     show_main(&app);

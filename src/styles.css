@@ -167,6 +167,19 @@ main { flex: 1; display: flex; min-height: 0; }
 @keyframes shake { 0%,100% { transform: rotate(-12deg); } 50% { transform: rotate(12deg); } }
 .call-text { font-size: 26px; font-weight: 700; margin: 14px 0 24px; }
 
+/* action picker */
+.action-card { text-align: center; width: min(400px, 92vw); }
+.action-card h2 { margin: 0 0 18px; }
+.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.action-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 12px; padding: 18px 8px; font-size: 15px; font-weight: 600;
+}
+.action-btn:hover { border-color: var(--accent); background: rgba(79,140,255,.10); transform: translateY(-1px); }
+.action-btn .ae { font-size: 34px; }
+.action-card #action-cancel { width: 100%; }
+
 .field { display: block; margin-bottom: 16px; font-size: 13px; color: var(--muted); }
 .field input { margin-top: 6px; }
 .field.checkbox { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 14px; }

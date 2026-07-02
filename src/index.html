@@ -62,10 +62,24 @@
       </main>
     </div>
 
+    <!-- Action picker: choose what to say when calling someone -->
+    <div id="action-panel" class="overlay hidden">
+      <div class="card action-card">
+        <h2 id="action-title">Fulano</h2>
+        <div class="action-grid">
+          <button class="action-btn" data-action="chamar"><span class="ae">📣</span>Chamar</button>
+          <button class="action-btn" data-action="almocar"><span class="ae">🍽️</span>Almoçar</button>
+          <button class="action-btn" data-action="treinar"><span class="ae">💪</span>Treinar</button>
+          <button class="action-btn" data-action="fumar"><span class="ae">🚬</span>Fumar</button>
+        </div>
+        <button id="action-cancel" class="ghost">Cancelar</button>
+      </div>
+    </div>
+
     <!-- Incoming call overlay -->
     <div id="incoming" class="overlay hidden">
       <div class="call-card">
-        <div class="call-emoji">🔔</div>
+        <div id="incoming-emoji" class="call-emoji">🔔</div>
         <div id="incoming-text" class="call-text"></div>
         <button id="incoming-dismiss" class="primary">Ok, já vou!</button>
       </div>

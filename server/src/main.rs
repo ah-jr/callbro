@@ -171,6 +171,8 @@ enum ClientMsg {
     Heartbeat,
     Call {
         to: String,
+        #[serde(default)]
+        action: String,
     },
     Assign { user: String, row: u32, col: u32, #[serde(default)] key: String },
     Unassign { user: String, #[serde(default)] key: String },
@@ -216,7 +218,7 @@ async fn handle_text(text: &str, conn_id: u64, state: &Arc<Mutex<ServerState>>) 
             s.broadcast();
         }
         ClientMsg::Heartbeat => {}
-        ClientMsg::Call { to } => {
+        ClientMsg::Call { to, action } => {
             let from_id = s.conns.get(&conn_id).and_then(|c| c.user_id.clone());
             if let Some(from_id) = from_id {
                 let from_name = s
@@ -225,10 +227,12 @@ async fn handle_text(text: &str, conn_id: u64, state: &Arc<Mutex<ServerState>>) 
                     .get(&from_id)
                     .map(|u| u.name.clone())
                     .unwrap_or_else(|| "Alguém".into());
+                let action = if action.is_empty() { "chamar".to_string() } else { action };
                 let payload = json!({
                     "type": "incoming_call",
                     "from": from_id,
                     "from_name": from_name,
+                    "action": action,
                 });
                 s.send_to_user(&to, &payload);
             }
