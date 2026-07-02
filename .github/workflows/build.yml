@@ -40,14 +40,10 @@ jobs:
           # Signs the update artifacts + generates latest.json for the auto-updater.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS code signing (Developer ID) + notarization — removes the
-          # Gatekeeper warning. Ignored on the Windows job.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # macOS Developer ID signing + notarization is intentionally disabled
+          # (unsigned distribution). To re-enable, restore the APPLE_* env vars
+          # here — the secrets are already set except a valid APPLE_PASSWORD
+          # (app-specific password for the Apple ID that owns team DAF629PKU2).
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "callbro ${{ github.ref_name }}"
