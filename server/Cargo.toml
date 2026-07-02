@@ -1,0 +1,20 @@
+[package]
+name = "callbro-server"
+version = "0.2.0"
+description = "callbro central hub - WebSocket server for the office intercom"
+edition = "2021"
+
+[[bin]]
+name = "callbro-server"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time", "io-util"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1

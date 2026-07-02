@@ -1,0 +1,9 @@
+# only the server/ crate is needed for the Docker build
+node_modules
+dist
+src
+src-tauri
+.github
+.git
+*.md
+**/target
