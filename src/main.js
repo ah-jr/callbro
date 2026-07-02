@@ -12,6 +12,8 @@ let editMode = false;
 let selectedUserId = null;
 let heartbeat = null;
 let denied = false; // set when the server rejects the team code
+const CALL_COOLDOWN_MS = 60000; // can't re-call the same person within 1 min
+const lastCall = {}; // userId -> timestamp of last call sent
 
 const $ = (id) => document.getElementById(id);
 const isAdmin = () => !!(config && config.admin_key && config.admin_key.trim());
@@ -290,6 +292,14 @@ function chipEl(user, showActions) {
 
 // ---------- calling ----------
 function callUser(user) {
+  const now = Date.now();
+  const elapsed = now - (lastCall[user.id] || 0);
+  if (elapsed < CALL_COOLDOWN_MS) {
+    const wait = Math.ceil((CALL_COOLDOWN_MS - elapsed) / 1000);
+    toast(`Você já chamou ${user.name}. Aguarde ${wait}s para chamar de novo.`);
+    return;
+  }
+  lastCall[user.id] = now;
   send({ type: "call", to: user.id });
   toast(`Chamando ${user.name}…`);
 }
