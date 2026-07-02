@@ -43,6 +43,34 @@ async function startApp() {
   $("me").textContent = isAdmin() ? `Admin: ${config.name}` : `Você: ${config.name}`;
   $("edit-btn").classList.toggle("hidden", !isAdmin());
   await connect();
+  checkForUpdate();
+}
+
+// ---------- auto-update ----------
+async function checkForUpdate() {
+  try {
+    const version = await invoke("check_update");
+    if (version) {
+      const btn = $("update-btn");
+      btn.textContent = `⬆︎ Atualizar (v${version})`;
+      btn.classList.remove("hidden");
+    }
+  } catch (e) {
+    /* offline or no release yet — ignore */
+  }
+}
+
+async function runUpdate() {
+  const btn = $("update-btn");
+  btn.disabled = true;
+  btn.textContent = "Atualizando…";
+  try {
+    await invoke("do_update"); // installs then relaunches; app exits here
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "⬆︎ Atualizar";
+    toast("Não foi possível atualizar agora. Tente mais tarde.");
+  }
 }
 
 // ---------- connection ----------
@@ -330,6 +358,8 @@ function wireEvents() {
     const cols = parseInt($("grid-cols").value, 10);
     if (rows > 0 && cols > 0) sendAdmin({ type: "set_grid", rows, cols });
   };
+
+  $("update-btn").onclick = runUpdate;
 
   $("incoming-dismiss").onclick = () => $("incoming").classList.add("hidden");
 
