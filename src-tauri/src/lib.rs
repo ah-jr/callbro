@@ -1,8 +1,5 @@
-mod server;
-
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
@@ -11,7 +8,7 @@ use tauri::{
 use tauri_plugin_notification::NotificationExt;
 
 fn show_main(app: &AppHandle) {
-    // macOS: reveal the Dock icon while the window is on screen, so it focuses
+    // macOS: reveal the Dock icon while the window is on screen so it focuses
     // reliably (important for the incoming-call popup).
     #[cfg(target_os = "macos")]
     let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
@@ -30,20 +27,10 @@ fn show_main(app: &AppHandle) {
 #[cfg(target_os = "macos")]
 fn prevent_app_nap() {
     use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
-    // NSActivityBackground = 0x000000FF — disables App Nap without keeping the
-    // whole Mac (display/system) awake.
-    let options = NSActivityOptions::from_bits_retain(0x0000_00FF);
+    let options = NSActivityOptions::from_bits_retain(0x0000_00FF); // NSActivityBackground
     let reason = NSString::from_str("callbro stays reachable in the background");
     let token = NSProcessInfo::processInfo().beginActivityWithOptions_reason(options, &reason);
     std::mem::forget(token);
-}
-
-/// This build is the admin app when compiled with `--features admin`.
-const IS_ADMIN: bool = cfg!(feature = "admin");
-
-#[derive(Default)]
-struct AppState {
-    server_started: AtomicBool,
 }
 
 /// Per-install settings, stored in the OS app-config dir.
@@ -53,13 +40,15 @@ struct Config {
     user_id: String,
     #[serde(default)]
     name: String,
-    /// Admin build only: secret required by the server for any layout/name edit.
-    /// Never present on client installs.
+    /// the "team code" shared with everyone; sent on connect
+    #[serde(default)]
+    join_secret: String,
+    /// admin password; only the admin sets it, unlocks layout editing
     #[serde(default)]
     admin_key: String,
-    /// Client only: optional manual "ip:port" fallback when mDNS fails.
+    /// optional override of the built-in server URL
     #[serde(default)]
-    manual_server: String,
+    server_url: String,
 }
 
 fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -85,24 +74,10 @@ fn write_config(app: &AppHandle, cfg: &Config) {
 }
 
 #[tauri::command]
-fn is_admin() -> bool {
-    IS_ADMIN
-}
-
-#[tauri::command]
 fn load_config(app: AppHandle) -> Result<Config, String> {
     let mut cfg = read_config(&app);
-    let mut dirty = false;
     if cfg.user_id.is_empty() {
         cfg.user_id = uuid::Uuid::new_v4().to_string();
-        dirty = true;
-    }
-    // The admin app mints its own secret key once; clients never get one.
-    if IS_ADMIN && cfg.admin_key.is_empty() {
-        cfg.admin_key = uuid::Uuid::new_v4().to_string();
-        dirty = true;
-    }
-    if dirty {
         write_config(&app, &cfg);
     }
     Ok(cfg)
@@ -112,44 +87,6 @@ fn load_config(app: AppHandle) -> Result<Config, String> {
 fn save_config(app: AppHandle, config: Config) -> Result<(), String> {
     write_config(&app, &config);
     Ok(())
-}
-
-#[tauri::command]
-fn lan_ip() -> Option<String> {
-    local_ip_address::local_ip().ok().map(|ip| ip.to_string())
-}
-
-/// Browse the LAN for a callbro server. Runs on a blocking thread.
-#[tauri::command]
-async fn discover_server() -> Option<String> {
-    tauri::async_runtime::spawn_blocking(|| server::discover(2500))
-        .await
-        .ok()
-        .flatten()
-}
-
-/// Start the embedded hub on this machine (admin build only). Idempotent.
-#[tauri::command]
-async fn start_host(app: AppHandle) -> Result<u16, String> {
-    if !IS_ADMIN {
-        return Err("this build cannot host".into());
-    }
-    let state = app.state::<AppState>();
-    if state.server_started.swap(true, Ordering::SeqCst) {
-        return Ok(server::DEFAULT_PORT);
-    }
-    let admin_key = read_config(&app).admin_key;
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&data_dir).ok();
-    let state_path = data_dir.join("state.json");
-    let ip = local_ip_address::local_ip().ok().map(|i| i.to_string());
-
-    tauri::async_runtime::spawn(async move {
-        if let Err(e) = server::run_server(server::DEFAULT_PORT, state_path, ip, admin_key).await {
-            eprintln!("callbro server error: {e}");
-        }
-    });
-    Ok(server::DEFAULT_PORT)
 }
 
 /// A call arrived: native OS notification + bring the window to the front.
@@ -163,7 +100,6 @@ fn alert(app: AppHandle, from_name: String) {
         .body(format!("{} tá te chamando", from_name))
         .show();
 
-    // an incoming call always brings the app back, even if hidden to the tray
     show_main(&app);
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.request_user_attention(Some(tauri::UserAttentionType::Critical));
@@ -179,16 +115,9 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .manage(AppState::default())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             prevent_app_nap();
-
-            if IS_ADMIN {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.set_title("callbro (admin)");
-                }
-            }
 
             // Launch automatically at login (release builds only, so dev runs
             // don't register the debug binary).
@@ -199,7 +128,7 @@ pub fn run() {
             }
 
             // Menu-bar / system-tray icon so the app stays reachable when its
-            // window is hidden. Left-click or the "Abrir callbro" item shows it.
+            // window is hidden. Left-click or "Abrir callbro" shows it.
             let show = MenuItem::with_id(app, "show", "Abrir callbro", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show])?;
             let _tray = TrayIconBuilder::with_id("callbro-tray")
@@ -225,8 +154,6 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let _ = window.hide();
-                // macOS: drop the Dock icon so it lives only in the menu bar
-                // (Docker-style) while hidden.
                 #[cfg(target_os = "macos")]
                 let _ = window
                     .app_handle()
@@ -234,15 +161,7 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .invoke_handler(tauri::generate_handler![
-            is_admin,
-            load_config,
-            save_config,
-            lan_ip,
-            discover_server,
-            start_host,
-            alert
-        ])
+        .invoke_handler(tauri::generate_handler![load_config, save_config, alert])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 

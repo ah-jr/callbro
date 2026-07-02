@@ -1,9 +1,7 @@
 name: build
 
-# Builds two apps for macOS (.dmg/.app) and Windows (.msi/.exe):
-#   - callbro         (client — for everyone)
-#   - callbro-admin   (admin — just for you; hosts the server + edits the layout)
-# Push a tag like v0.1.0, or run manually from the Actions tab.
+# Builds the callbro app for macOS (.dmg/.app) and Windows (.msi/.exe).
+# Push a tag like v0.2.0, or run manually from the Actions tab.
 on:
   push:
     tags: ["v*"]
@@ -18,17 +16,9 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            variant: client
             args: "--target universal-apple-darwin"
-          - platform: macos-latest
-            variant: admin
-            args: "--target universal-apple-darwin --features admin --config src-tauri/tauri.admin.conf.json"
           - platform: windows-latest
-            variant: client
             args: ""
-          - platform: windows-latest
-            variant: admin
-            args: "--features admin --config src-tauri/tauri.admin.conf.json"
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4

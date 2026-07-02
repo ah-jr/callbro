@@ -1,76 +1,56 @@
 const { invoke } = window.__TAURI__.core;
 
+// The central server (EasyPanel). Override per-machine in Settings if needed.
+const DEFAULT_SERVER = "wss://callbro-callbro.zyq4fu.easypanel.host";
+
 // ---------- app state ----------
-let config = null; // { user_id, name, admin_key, manual_server }
-let admin = false; // is this the admin build?
+let config = null; // { user_id, name, join_secret, admin_key, server_url }
 let state = { grid: { rows: 5, cols: 8 }, users: [] };
 let ws = null;
 let reconnectTimer = null;
 let editMode = false;
-let selectedUserId = null; // in edit mode: user waiting to be placed
+let selectedUserId = null;
 let heartbeat = null;
+let denied = false; // set when the server rejects the team code
 
 const $ = (id) => document.getElementById(id);
+const isAdmin = () => !!(config && config.admin_key && config.admin_key.trim());
+const serverUrl = () => (config.server_url && config.server_url.trim()) || DEFAULT_SERVER;
 
 // ---------- boot ----------
 window.addEventListener("DOMContentLoaded", async () => {
   wireEvents();
-  admin = await invoke("is_admin").catch(() => false);
   config = await invoke("load_config");
-  if (!config.name || !config.name.trim()) {
-    show("setup");
-    $("setup-name").focus();
+  if (!config.name || !config.name.trim() || !config.join_secret || !config.join_secret.trim()) {
+    showSetup();
   } else {
     startApp();
   }
 });
 
-function show(screen) {
-  $("setup").classList.toggle("hidden", screen !== "setup");
-  $("app").classList.toggle("hidden", screen !== "app");
+function showSetup(errorText) {
+  $("setup").classList.remove("hidden");
+  $("app").classList.add("hidden");
+  $("setup-name").value = config.name || "";
+  $("setup-code").value = config.join_secret || "";
+  $("setup-error").textContent = errorText || "";
+  $("setup-name").focus();
 }
 
 async function startApp() {
-  show("app");
-  $("me").textContent = admin ? `Admin: ${config.name}` : `Você: ${config.name}`;
-  $("edit-btn").classList.toggle("hidden", !admin);
+  $("setup").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("me").textContent = isAdmin() ? `Admin: ${config.name}` : `Você: ${config.name}`;
+  $("edit-btn").classList.toggle("hidden", !isAdmin());
   await connect();
 }
 
 // ---------- connection ----------
-async function resolveServer() {
-  if (admin) {
-    const port = await invoke("start_host");
-    return `127.0.0.1:${port}`;
-  }
-  if (config.manual_server && config.manual_server.trim()) {
-    return config.manual_server.trim();
-  }
-  const found = await invoke("discover_server");
-  return found || null;
-}
-
-async function connect() {
+function connect() {
   clearTimeout(reconnectTimer);
   setStatus("conectando…", "");
-
-  let addr;
   try {
-    addr = await resolveServer();
-  } catch (e) {
-    addr = null;
-  }
-
-  if (!addr) {
-    setStatus("servidor não encontrado", "bad");
-    $("hint").textContent =
-      "Não achei o servidor na rede. Peça ao admin o IP e informe em ⚙︎ → Servidor manual.";
-    reconnectTimer = setTimeout(connect, 5000);
-    return;
-  }
-
-  try {
-    ws = new WebSocket(`ws://${addr}`);
+    ws = new WebSocket(serverUrl());
   } catch (e) {
     scheduleReconnect();
     return;
@@ -78,9 +58,9 @@ async function connect() {
 
   ws.onopen = () => {
     setStatus("conectado", "ok");
-    send({ type: "join", id: config.user_id, name: config.name });
+    send({ type: "join", id: config.user_id, name: config.name, secret: config.join_secret });
     clearInterval(heartbeat);
-    heartbeat = setInterval(() => send({ type: "heartbeat" }), 15000);
+    heartbeat = setInterval(() => send({ type: "heartbeat" }), 20000);
   };
   ws.onmessage = (ev) => {
     let msg;
@@ -94,12 +74,19 @@ async function connect() {
       render();
     } else if (msg.type === "incoming_call") {
       onIncomingCall(msg.from_name || "Alguém");
+    } else if (msg.type === "denied") {
+      // wrong team code — stop reconnecting and send them back to setup
+      denied = true;
+      clearTimeout(reconnectTimer);
+      clearInterval(heartbeat);
+      config.join_secret = "";
+      invoke("save_config", { config });
+      try { ws.close(); } catch {}
+      showSetup("Código da equipe inválido. Tente de novo.");
     }
   };
-  ws.onclose = () => scheduleReconnect();
-  ws.onerror = () => {
-    try { ws.close(); } catch {}
-  };
+  ws.onclose = () => { if (!denied) scheduleReconnect(); };
+  ws.onerror = () => { try { ws.close(); } catch {} };
 }
 
 function scheduleReconnect() {
@@ -112,8 +99,6 @@ function scheduleReconnect() {
 function send(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }
-
-// Admin edit messages carry the secret key (only the admin build has one).
 function sendAdmin(obj) {
   send({ ...obj, key: config.admin_key || "" });
 }
@@ -328,7 +313,7 @@ function speak(text) {
 // ---------- ui events ----------
 function wireEvents() {
   $("setup-save").onclick = saveSetup;
-  $("setup-name").addEventListener("keydown", (e) => {
+  $("setup-code").addEventListener("keydown", (e) => {
     if (e.key === "Enter") saveSetup();
   });
 
@@ -355,34 +340,41 @@ function wireEvents() {
 
 async function saveSetup() {
   const name = $("setup-name").value.trim();
-  if (!name) return;
+  const code = $("setup-code").value.trim();
+  if (!name) { $("setup-error").textContent = "Digite seu nome."; return; }
+  if (!code) { $("setup-error").textContent = "Digite o código da equipe."; return; }
   config.name = name;
+  config.join_secret = code;
   await invoke("save_config", { config });
+  denied = false;
   startApp();
 }
 
-async function openSettings() {
-  $("cfg-client").classList.toggle("hidden", admin);
-  $("cfg-admin").classList.toggle("hidden", !admin);
-  if (admin) {
-    const ip = await invoke("lan_ip").catch(() => null);
-    $("admin-info").textContent = ip
-      ? `Este é o computador admin. Os outros te encontram automaticamente. IP manual, se precisarem: ${ip}:8787`
-      : "Este é o computador admin (hospeda o servidor).";
-  } else {
-    $("cfg-server").value = config.manual_server || "";
-  }
+function openSettings() {
+  $("cfg-admin").value = config.admin_key || "";
+  $("cfg-server").value = config.server_url || "";
   $("settings").classList.remove("hidden");
 }
 
 async function saveSettings() {
-  if (!admin) {
-    config.manual_server = $("cfg-server").value.trim();
-    await invoke("save_config", { config });
-    try { if (ws) ws.close(); } catch {}
-    await connect();
+  config.admin_key = $("cfg-admin").value.trim();
+  config.server_url = $("cfg-server").value.trim();
+  await invoke("save_config", { config });
+
+  $("me").textContent = isAdmin() ? `Admin: ${config.name}` : `Você: ${config.name}`;
+  $("edit-btn").classList.toggle("hidden", !isAdmin());
+  if (!isAdmin() && editMode) {
+    editMode = false;
+    $("editor").classList.add("hidden");
+    $("edit-btn").textContent = "Editar layout";
+    render();
   }
   $("settings").classList.add("hidden");
+
+  // reconnect in case the server URL changed
+  denied = false;
+  try { if (ws) ws.close(); } catch {}
+  connect();
 }
 
 // ---------- toast ----------
