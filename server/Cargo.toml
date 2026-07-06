@@ -1,6 +1,6 @@
 [package]
 name = "callbro-server"
-version = "0.2.0"
+version = "0.3.0"
 description = "callbro central hub - WebSocket server for the office intercom"
 edition = "2021"
 

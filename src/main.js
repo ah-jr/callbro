@@ -1,7 +1,7 @@
 const { invoke } = window.__TAURI__.core;
 
 // The central server (EasyPanel). Override per-machine in Settings if needed.
-const DEFAULT_SERVER = "wss://callbro-callbro.zyq4fu.easypanel.host";
+const DEFAULT_SERVER = "wss://callbro.3z77v07vd48by.sa-east-1.cs.amazonlightsail.com";
 
 // ---------- app state ----------
 let config = null; // { user_id, name, join_secret, admin_key, server_url }

@@ -25,7 +25,7 @@ checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
 
 [[package]]
 name = "callbro-server"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures-util",
  "serde",

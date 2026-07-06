@@ -1,7 +1,9 @@
-// callbro central hub — standalone WebSocket server (deploy on EasyPanel).
+// callbro central hub — standalone WebSocket server.
 //
-// Clients connect over wss:// (TLS terminated by EasyPanel's proxy; internally
-// plain ws on $PORT). The server keeps the authoritative roster (users + seats
+// Clients connect over wss:// (TLS terminated by the platform's proxy — Lightsail
+// container service / any LB; internally plain ws on $PORT). A non-WebSocket GET
+// on the same port returns HTTP 200 "ok" so load-balancer health checks pass.
+// The server keeps the authoritative roster (users + seats
 // + grid), persists it to disk, and relays "call" messages.
 //
 // Access control:
@@ -19,6 +21,7 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message;
@@ -304,6 +307,27 @@ async fn handle_text(text: &str, conn_id: u64, state: &Arc<Mutex<ServerState>>) 
 }
 
 async fn handle_conn(stream: tokio::net::TcpStream, state: Arc<Mutex<ServerState>>) {
+    // Peek (non-destructively) at the start of the request so we can answer a
+    // plain HTTP health check with 200 OK. Load balancers (Lightsail, ALB, …)
+    // probe the port with a normal GET; only real WebSocket upgrades carry an
+    // `Upgrade: websocket` header. Everything that isn't an upgrade gets a
+    // minimal HTTP response and is closed — the WS path is untouched.
+    let mut peek = [0u8; 1024];
+    let n = stream.peek(&mut peek).await.unwrap_or(0);
+    let head = String::from_utf8_lossy(&peek[..n]).to_lowercase();
+    if n > 0 && !head.contains("upgrade: websocket") {
+        let mut stream = stream;
+        let body = "ok";
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(resp.as_bytes()).await;
+        let _ = stream.shutdown().await;
+        return;
+    }
+
     let ws = match tokio_tungstenite::accept_async(stream).await {
         Ok(w) => w,
         Err(_) => return,
